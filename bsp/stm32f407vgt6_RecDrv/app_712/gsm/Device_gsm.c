@@ -1184,9 +1184,9 @@ void GSM_Module_TotalInitial(void)
 					 CommAT.Initial_step++;
 					 break;
 			 case 5:
-					 rt_hw_gsm_output(CommAT_Str6);    
+					 rt_hw_gsm_output(CommAT_Str8);     
 					 if(DispContent)
-					 rt_kprintf(CommAT_Str6); 
+					 rt_kprintf(CommAT_Str8); 
 					 CommAT.Initial_step++; 
 					 break;
 			 case 6:
@@ -1862,7 +1862,14 @@ static void GSM_Process(u8 *instr, u16 len)
 			   Delete_all_sms_flag=1;  
 			 }
 	    } 
-		               
+		if( strncmp( (char*)GSM_rx, "+ZCEND:25", 9 ) == 0 )  
+		{   //+ZCEND:25
+		              
+		     CallState=CallState_Idle;	
+			  Speak_OFF;// ¹Ø±Õ¹¦·Å 
+			 failed = true;
+			 rt_kprintf("\r\n Callstate=Idle\r\n"); 
+		  }
 		//+ZCEND
 		// +ZPPPSTATUS: CLOSED
 	   //============================================================================
@@ -1933,10 +1940,11 @@ static void GSM_Process(u8 *instr, u16 len)
 	      connect=true;
 	}
 	
-#ifndef MC8332_CDMA
+#ifdef MC8332_CDMA
 	else
 	if (strncmp((char*)GSM_rx, "ERROR",5) == 0) 
 	{
+	    rt_kprintf("\r\n rx _error \r\n");
 	   error = true;
 	   CallState=CallState_Idle;  
 	   //----------------------

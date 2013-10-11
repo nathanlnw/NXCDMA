@@ -1569,10 +1569,10 @@
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <Focus>0</Focus>
-      <ColumnNumber>0</ColumnNumber>
+      <ColumnNumber>35</ColumnNumber>
       <tvExpOptDlg>0</tvExpOptDlg>
-      <TopLine>1</TopLine>
-      <CurrentLine>1</CurrentLine>
+      <TopLine>893</TopLine>
+      <CurrentLine>905</CurrentLine>
       <bDave2>0</bDave2>
       <PathWithFileName>.\app_712\gsm\SMS_PDU.c</PathWithFileName>
       <FilenameWithoutPath>SMS_PDU.c</FilenameWithoutPath>
@@ -1865,7 +1865,7 @@
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <Focus>0</Focus>
-      <ColumnNumber>30</ColumnNumber>
+      <ColumnNumber>36</ColumnNumber>
       <tvExpOptDlg>0</tvExpOptDlg>
       <TopLine>90</TopLine>
       <CurrentLine>91</CurrentLine>
