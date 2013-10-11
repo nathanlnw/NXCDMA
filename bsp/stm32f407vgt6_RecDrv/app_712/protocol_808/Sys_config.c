@@ -13,7 +13,7 @@
 #include  "Vdr.h"
 
  
-#define   SYSID            0xE9EE     
+#define   SYSID            0xB9CE     
                                 /*        
                                                         0x0000   -----   0x00FF  生产和研发用
                                                         0x0100   -----   0x0FFF  产品出货用
@@ -28,6 +28,7 @@ SYS_CONF          SysConf_struct;   //  系统配置
 ALIGN(RT_ALIGN_SIZE) 
 JT808_CONF       JT808Conf_struct;    //  JT 808   相关配置   
 JT808_CONF       JT808_struct_Bak;    //  JT808 相关模式设置备份
+JT808_CONF       JT808_struct_Bak2;   //  JT808  bak 2
 
 ALIGN(RT_ALIGN_SIZE) 
 TIRED_CONF      TiredConf_struct;    //  疲劳驾驶相关配置
@@ -388,10 +389,16 @@ void  Vehicleinfo_Init(void)
 	Vechicle_Info.Dev_ProvinceID=64;  // 默认省ID       12   天津  64  宁夏
 	Vechicle_Info.Dev_CityID=101;      // 默认市ID   0		101  宁夏银川 
 	Vechicle_Info.Dev_Color=1;       // 默认颜色    // JT415    1  蓝 2 黄 3 黑 4 白 9其他     
-	Vechicle_Info.loginpassword_flag=0;
+	//Vechicle_Info.loginpassword_flag=0;
 	Vechicle_Info.Link_Frist_Mode=0; //     0  : dnsr first     1: mainlink  first  
 
 	DF_WriteFlashSector(DF_Vehicle_Struct_offset,0,(u8*)&Vechicle_Info,sizeof(Vechicle_Info));  
+	
+	WatchDog_Feed();
+	DF_WriteFlashSector(DF_VehicleBAK_Struct_offset,0,(u8*)&Vechicle_Info,sizeof(Vechicle_Info)); 
+	
+	WatchDog_Feed();
+	DF_WriteFlashSector(DF_VehicleBAK2_Struct_offset,0,(u8*)&Vechicle_Info,sizeof(Vechicle_Info)); 
 	
 }
 
@@ -1343,7 +1350,11 @@ void  FirstRun_Config_Write(void)
 		   RailPolygen_Init();	
 		   RouteLine_Init(); 
                  TEXTMSG_Write_Init();	   
- 		 
+				 
+ 		  //---- add special -----------  
+ 		  Login_Menu_Flag=0;     //  输入界面为0 
+		  DF_WriteFlashSector(DF_LOGIIN_Flag_offset,0,&Login_Menu_Flag,1); 
+		  
 
 }
 //-----------------------------------------------------------------
@@ -1378,49 +1389,95 @@ void SetConfig(void)
 
  void ReadConfig(void) 
 {
-    u16   i=0;
+    u16   res[3];
 	
            DF_delay_ms(500);  
 		  DF_LOCK=1;   // lock  df
           // Api_Config_read(jt808,0,(u8*)&JT808Conf_struct,sizeof(JT808Conf_struct));   //  读取JT808   配置信息
          //-------- JT808 参数配置读取测试，操作频繁而且重要所以需要特殊处理 
            DF_ReadFlash(JT808Start_offset, 0,(u8*)&JT808Conf_struct,sizeof(JT808Conf_struct)); 
-		   DF_delay_ms(100); 	// large content delay	
+		   DF_delay_ms(80); 	// large content delay	
 
 		   DF_ReadFlash(JT808_BakSetting_offset, 0,(u8*)&JT808_struct_Bak,sizeof(JT808_struct_Bak)); 
-		   DF_delay_ms(100); 	// large content delay	 
+		   DF_delay_ms(80); 	// large content delay	 
 
-		   // 2. 比较
-		  i=memcmp((u8*)&JT808Conf_struct,(u8*)&JT808_struct_Bak,sizeof(JT808_struct_Bak));
+		   DF_ReadFlash(JT808_Bak2Setting_offset, 0,(u8*)&JT808_struct_Bak2,sizeof(JT808_struct_Bak2)); 
+		   DF_delay_ms(80); 	// large content delay	
 
-			if(i==0)
-			   rt_kprintf("\r\n JT808 读取校验成功! i=%d\r\n",i); 
-			else
-				{
-				   rt_kprintf("\r\n JT808 读取校验失败! i=%d\r\n",i); 	 
+		   // 2. compare
+		   /*
+		           note:   res[0] == org cmp  bak    res[1]== bak  cmp  bak2    res[2]== bak2  cmp  org		  
 
-				   if((JT808Conf_struct.DURATION.Default_Dur==0xFF)&&\
-				   	  (JT808Conf_struct.DURATION.Sleep_Dur==0xFF)&&\
-				   	  (JT808Conf_struct.SD_MODE.Dur_EmegencMode==0xFF))
-				    {
-				       Api_Config_Recwrite_Large(jt808,0,(u8*)&JT808_struct_Bak,sizeof(JT808_struct_Bak));	
-					   rt_kprintf("\r\n Formal Fail");
-				   	}	
-				   else 	   
-                   if((JT808_struct_Bak.DURATION.Default_Dur==0xFF)&&\
-				   	  (JT808_struct_Bak.DURATION.Sleep_Dur==0xFF)&&\
-				   	  (JT808_struct_Bak.SD_MODE.Dur_EmegencMode==0xFF))
-                   	{
-				      Api_Config_Recwrite_Large(jt808,0,(u8*)&JT808Conf_struct,sizeof(JT808Conf_struct));
-					   rt_kprintf("\r\n Bak Fail");
-                   	}
-                   else
-                   	{
-                   	  rt_kprintf("\r\n all recover"); 
-	                  JT808_Conf_init();	
-                   	}
-				}
-           
+		           ---org --<seg1>--  bak ---<seg2>----bak2 ---<seg3>---
+		           |-----------<---------------<----------------------|
+		    */
+		   res[0]=memcmp((u8*)&JT808Conf_struct,(u8*)&JT808_struct_Bak,sizeof(JT808_struct_Bak));
+		   res[1]=memcmp((u8*)&JT808_struct_Bak,(u8*)&JT808_struct_Bak2,sizeof(JT808_struct_Bak));
+		   res[2]=memcmp((u8*)&JT808_struct_Bak2,(u8*)&JT808Conf_struct,sizeof(JT808_struct_Bak));
+
+           // 3. judge 
+           if(res[0]&&res[1]&&res[2])   // 全有问题
+           	{
+           	   rt_kprintf("\r\n JT808 全部失败!\r\n"); 	
+			   rt_kprintf("\r\n need all recover"); 
+	           JT808_Conf_init();	
+           	}
+		   else
+		   if(res[0]&&res[1])   //    seg1  seg2  有问题说明  BAK error
+		   	{    
+		   	    // org  bak2 ---ok      bak---error
+		   	   if((u8)(JT808Conf_struct.DURATION.Default_Dur>>24)!=0xFF) // 判断正确的是不是 FF
+		   	   	{ 
+		   	   	 
+				  DF_WriteFlashSector(JT808_BakSetting_offset,0,(u8*)&JT808Conf_struct,sizeof(JT808_struct_Bak));
+				  rt_kprintf("\r\n JT808 BAK error ,correct ok"); 			
+
+		   	   	}
+			   else
+			   	{ 
+			   	  rt_kprintf("\r\n need all recover 1"); 
+				  JT808_Conf_init();
+			   	}
+
+		   	}
+		   else
+		   if(res[0]&&res[2])  //  seg1  seg3    有问题说明 BAK2  error
+		   	{
+		   	   // org  bak  ---ok       bak2 -----error
+		   	   if((u8)(JT808Conf_struct.DURATION.Default_Dur>>24)!=0xFF) // 判断正确的是不是 FF
+		   	   	{ 
+		   	   	 
+				  DF_WriteFlashSector(JT808_Bak2Setting_offset,0,(u8*)&JT808Conf_struct,sizeof(JT808_struct_Bak));
+				  rt_kprintf("\r\n JT808 BAK2 error ,correct ok"); 			
+
+		   	   	}
+			   else
+			   	{ 
+			   	  rt_kprintf("\r\n need all recover 2"); 
+				  JT808_Conf_init();
+			   	}
+
+		   	}
+		   else
+		   if(res[1]&&res[2])  //  seg2  seg3	 有问题说明 org  error
+			{
+			   //  bak  bak2 --ok     org---error
+		         if((u8)(JT808_struct_Bak.DURATION.Default_Dur>>24)!=0xFF) // 判断正确的是不是 FF
+		   	   	{ 
+		   	   	 
+				  DF_WriteFlashSector(JT808Start_offset,0,(u8*)&JT808_struct_Bak,sizeof(JT808_struct_Bak));
+				  rt_kprintf("\r\n JT808 org error ,correct ok"); 	 		
+
+		   	   	}
+			   else
+			   	{ 
+			   	  rt_kprintf("\r\n need all recover 3"); 
+				  JT808_Conf_init();
+			   	}
+		   
+			} 
+		   else
+		   	rt_kprintf("\r\n JT808 读取校验成功! \r\n"); 
          //-------------------------------------------------------------------------------------
 		   
 		   SysConfig_Read();  //读取系统配置信息	                 
@@ -1436,8 +1493,81 @@ void SetConfig(void)
                  BD_EXT_Read();   
 		   Api_Read_var_rd_wr();	  	  	   
 
-		   DF_ReadFlash(DF_Vehicle_Struct_offset,0,(u8*)&Vechicle_Info,sizeof(Vechicle_Info));   
-           
+		   DF_ReadFlash(DF_Vehicle_Struct_offset,0,(u8*)&Vechicle_Info,sizeof(Vechicle_Info));  
+		   
+		   WatchDog_Feed();
+		   DF_ReadFlash(DF_VehicleBAK_Struct_offset,0,(u8*)&Vechicle_Info_BAK,sizeof(Vechicle_Info_BAK)); 
+
+		   WatchDog_Feed();
+		   DF_ReadFlash(DF_VehicleBAK2_Struct_offset,0,(u8*)&Vechicle_info_BAK2,sizeof(Vechicle_info_BAK2)); 
+
+		   //  compare
+		   /*
+		           note:   res[0] == org cmp  bak    res[1]== bak  cmp  bak2    res[2]== bak2  cmp  org		  
+
+		           ---org --<seg1>--  bak ---<seg2>----bak2 ---<seg3>---
+		           |-----------<---------------<----------------------|
+		    */
+		   res[0]=memcmp((u8*)&Vechicle_Info,(u8*)&Vechicle_Info_BAK,sizeof(Vechicle_Info_BAK));	
+		   res[1]=memcmp((u8*)&Vechicle_Info_BAK,(u8*)&Vechicle_info_BAK2,sizeof(Vechicle_Info_BAK));
+		   res[2]=memcmp((u8*)&Vechicle_info_BAK2,(u8*)&Vechicle_Info,sizeof(Vechicle_Info_BAK));
+
+			// 3. judge 
+			if(res[0]&&res[1]&&res[2])	 // 全有问题
+			 {
+				rt_kprintf("\r\n Vechicle全部失败! \r\n");	 
+				rt_kprintf("\r\n need all recover"); 
+				Vehicleinfo_Init();// 写入车辆信息	 
+			 }
+			else
+			if(res[0]&&res[1])	 //    seg1  seg2  有问题说明  BAK error
+			 {	  
+				 // org  bak2 ---ok 	 bak---error
+				if((u8)(Vechicle_Info.Dev_CityID>>8)!=0xFF) // 判断正确的是不是 FF
+				{ 
+				  DF_WriteFlashSector(DF_VehicleBAK_Struct_offset,0,(u8*)&Vechicle_Info,sizeof(Vechicle_Info)); 
+				  rt_kprintf("\r\n Vehicle BAK error ,correct ok");   
+		   	   	}
+			   else
+			   	{ 
+			   	  rt_kprintf("\r\n Vehicle need all recover 1"); 
+				  Vehicleinfo_Init();
+			   	}			
+			 }
+			else
+			if(res[0]&&res[2])	//	seg1  seg3	  有问题说明 BAK2  error
+			 {
+				// org	bak  ---ok		 bak2 -----error
+			    if((u8)(Vechicle_Info.Dev_CityID>>8)!=0xFF) // 判断正确的是不是 FF
+				{ 
+				  DF_WriteFlashSector(DF_VehicleBAK2_Struct_offset,0,(u8*)&Vechicle_Info,sizeof(Vechicle_Info)); 
+				  rt_kprintf("\r\n Vehicle BAK2 error ,correct ok");   
+		   	   	}
+			   else
+			   	{ 
+			   	  rt_kprintf("\r\n Vehicle need all recover 2"); 
+				  Vehicleinfo_Init();
+			   	}
+			
+			 }
+			else
+			if(res[1]&&res[2])	//	seg2  seg3	  有问题说明 org  error
+			 {
+				//	bak  bak2 --ok	   org---error
+			    	if((u8)(Vechicle_Info.Dev_CityID>>8)!=0xFF) // 判断正确的是不是 FF
+				{ 
+				  DF_WriteFlashSector(DF_Vehicle_Struct_offset,0,(u8*)&Vechicle_Info_BAK,sizeof(Vechicle_Info_BAK)); 
+				  rt_kprintf("\r\n Vehicle BAK error ,correct ok");   
+		   	   	}
+			   else
+			   	{ 
+			   	  rt_kprintf("\r\n Vehicle need all recover 3"); 
+				  Vehicleinfo_Init();
+			   	}
+			
+			 }
+			else
+				rt_kprintf("\r\n Vehicle 读取校验成功! \r\n");  
 			//---- 设备ID  --------	 
 		  // memset(DeviceNumberID,0,sizeof(DeviceNumberID));
 		  // DF_ReadFlash(DF_DeviceID_offset,0,(u8*)DeviceNumberID,12);  
@@ -1449,7 +1579,8 @@ void SetConfig(void)
 		   memset(SimID_12D,0,sizeof(SimID_12D));
 		   DF_ReadFlash(DF_SIMID_12D,0,(u8*)SimID_12D,12);  
 
-		   
+		   //------  读取 录入状态-----------
+		   DF_ReadFlash(DF_LOGIIN_Flag_offset,0,&Login_Menu_Flag,1); 
 		   
 		   if(JT808Conf_struct.DF_K_adjustState)  
 		   {
